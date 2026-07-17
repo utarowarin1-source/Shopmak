@@ -2,6 +2,12 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+export interface Category {
+  id: string;
+  name: string;
+  icon?: string;
+}
+
 export interface Product {
   id: string;
   title: string;
@@ -9,7 +15,7 @@ export interface Product {
   image: string;
   shopeeUrl: string;
   lazadaUrl: string;
-  category: { id: string; name: string };
+  category: Category;
   isFeatured?: boolean;
   isBestSeller?: boolean;
 }
@@ -17,8 +23,8 @@ export interface Product {
 interface AppContextType {
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
-  categories: string[];
-  setCategories: React.Dispatch<React.SetStateAction<string[]>>;
+  categories: Category[]; 
+  setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
   isAdminLoggedIn: boolean;
   loginAdmin: (password: string) => boolean;
   logoutAdmin: () => void;
@@ -28,8 +34,12 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<string[]>(['ทั้งหมด', 'Gadgets', 'ของใช้ในบ้าน']);
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
+const [categories, setCategories] = useState<Category[]>([
+  { id: '1', name: 'ทั้งหมด', icon: '🏠' },
+  { id: '2', name: 'Gadgets', icon: '📱' },
+  { id: '3', name: 'ของใช้ในบ้าน', icon: '🛋️' },
+]);
+const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
 
   // 1. โหลดข้อมูลเริ่มต้นจาก LocalStorage เมื่อเปิดเว็บครั้งแรก
   useEffect(() => {
@@ -82,7 +92,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // 3. ระบบจำลอง Login (ตั้งรหัสผ่านง่ายๆ ไว้ก่อน เช่น 1234)
   const loginAdmin = (password: string) => {
-    if (password === '1234') { // แก้ไขรหัสผ่านตรงนี้ได้ครับ
+    if (password === 'a12345678') { // แก้ไขรหัสผ่านตรงนี้ได้ครับ
       setIsAdminLoggedIn(true);
       localStorage.setItem('shopmak_admin_login', 'true');
       return true;

@@ -17,6 +17,7 @@ export default function AdminPage() {
   
   // State สำหรับจัดการฟอร์มสินค้า (ทั้งเพิ่มและแก้ไข)
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingCat, setEditingCat] = useState<any>(null);
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState('');
   const [image, setImage] = useState('');
@@ -41,7 +42,22 @@ export default function AdminPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [sortBy, setSortBy] = useState('newest'); // newest, price-asc, price-desc
+// ➕ ฟังก์ชันเพิ่มหมวดหมู่ใหม่ (เขียนแบบยืดหยุ่นเพื่อไม่ให้เกิด Error กับ AppContext)
+// ➕ ฟังก์ชันเพิ่มหมวดหมู่ใหม่ (ใช้โครงสร้าง Object ตามมาตรฐาน)
+const handleAddCategory = () => {
+  if (!newCategoryName.trim()) return alert('กรุณากรอกชื่อหมวดหมู่');
 
+  const newCat = {
+    id: Date.now().toString(),
+    name: newCategoryName.trim(),
+    icon: '📦'
+  };
+
+  setCategories([...categories, newCat]);
+  setNewCategoryName('');
+  alert('เพิ่มหมวดหมู่สำเร็จ!');
+};
+  
   // 📢 ตั้งค่าประกาศหน้าร้าน (Shop Settings)
   const [shopAnnouncement, setShopAnnouncement] = useState('🎉 ต้อนรับโปรโมชันประจำเดือน! แจกพิกัดโค้ดส่วนลด Shopee & Lazada ด้านล่างนี้เลย!');
 
@@ -129,7 +145,15 @@ export default function AdminPage() {
     }
 
     if (importedProducts.length > 0) {
-      setProducts([...importedProducts, ...products]);
+ setProducts([
+  ...importedProducts.map((p: any) => ({
+    ...p,
+    category: typeof p.category === 'string' 
+      ? { id: 'default', name: p.category, icon: '📦' } 
+      : { ...p.category, icon: p.category.icon || '📦' }
+  })),
+  ...products
+]);
       setBulkUrls('');
       alert(`🎉 นำเข้าสำเร็จทั้งหมด ${importedProducts.length} รายการ!`);
     }
@@ -169,14 +193,14 @@ export default function AdminPage() {
   };
 
   // ✏️ ฟังก์ชันดึงข้อมูลสินค้าเก่าขึ้นมาเตรียมแก้ไข
-  const startEdit = (product: Product) => {
+const startEdit = (product: Product) => {
     setEditingId(product.id);
     setTitle(product.title);
     setPrice(product.price.toString());
     setImage(product.image);
     setShopeeUrl(product.shopeeUrl || '');
     setLazadaUrl(product.lazadaUrl || '');
-    setSelectedCategory(product.category.name || '');
+    setSelectedCategory(product.category.id || product.category.name || '');
     setIsFeatured(product.isFeatured || false);
     setIsBestSeller(product.isBestSeller || false);
     
@@ -184,38 +208,49 @@ export default function AdminPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // 🗑️ ฟังก์ชันสำหรับลบหมวดหมู่สินค้าออกจากระบบ (เพิ่มเข้ามาใหม่)
+  const handleDeleteCategory = (catId: string) => {
+    if (confirm('คุณแน่ใจใช่ไหมที่จะลบหมวดหมู่นี้? สินค้าในหมวดหมู่นี้จะไม่ถูกลบ แต่จะกลับไปอยู่หมวดหมู่ทั่วไป')) {
+      // 1. ลบหมวดหมู่ออกจากรายการ
+      setCategories(categories.filter((cat: any) => (cat.id ? cat.id !== catId : cat !== catId)));
+      
+      // 2. ปรับสินค้าที่เคยอยู่หมวดนี้ให้ไปอยู่ "ทั่วไป" อัตโนมัติ (ป้องกันระบบเออร์เรอร์)
+      const updatedProducts = products.map((prod: any) => {
+        if (prod.category?.id === catId || prod.category?.name === catId) {
+          return { ...prod, category: { id: 'ทั่วไป', name: 'ทั่วไป' } };
+        }
+        return prod;
+      });
+      setProducts(updatedProducts);
+      alert('ลบหมวดหมู่เรียบร้อยแล้วครับ');
+    }
+  };
+
   // 🗑️ ลบสินค้า
-  const handleDeleteProduct = (id: string) => {
+const handleDeleteProduct = (id: string) => {
     if (confirm('ยืนยันที่จะลบสินค้าชิ้นนี้อย่างถาวร?')) {
       setProducts(products.filter(p => p.id !== id));
     }
   };
 
-  // 🏷️ จัดการหมวดหมู่
-  const handleAddCategory = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = newCategoryName.trim();
-    if (!trimmed) return;
-    if (categories.includes(trimmed)) return alert('มีหมวดหมู่นี้อยู่แล้ว');
-    setCategories([...categories, trimmed]);
-    setNewCategoryName('');
-  };
-
-  // 📊 คำนวณสถิติภาพรวมร้านค้า (Dashboard Overview Widgets)
+  // 📊 คำนวณสถิติภาพรวมร้านค้า (Dashboard Overview Widgets) - อัปเดตรองรับการนับยอดคลิก
   const stats = useMemo(() => {
     return {
       total: products.length,
       shopee: products.filter(p => p.shopeeUrl).length,
       lazada: products.filter(p => p.lazadaUrl).length,
-      categoriesCount: categories.length
+      categoriesCount: categories.length,
+      totalClicks: products.reduce((sum, p) => sum + ((p as any).clicks || 0), 0) // 🔥 เพิ่มตัวคำนวณยอดคลิกรวมทั้งหมดในระบบ
     };
   }, [products, categories]);
 
-  // 🔍 ค้นหา กรอง และ จัดเรียงข้อมูลสินค้าตามเงื่อนไข
+  // 🔍 ค้นหา กรอง และ จัดเรียงข้อมูลสินค้าตามเงื่อนไข - ปรับปรุงความแม่นยำในการกรองหมวดหมู่
   const processedProducts = useMemo(() => {
     let result = products.filter(p => {
-      const matchSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()); // No change needed here
-      const matchCat = filterCategory ? p.category.name === filterCategory : true; // Access .name property
+      const matchSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase());
+      // 📂 รองรับการเช็คหมวดหมู่ทั้งแบบวัตถุ (Objectที่มี .id/.name) หรือแบบข้อความธรรมดา (String)
+      const catIdentifier = p.category?.id || p.category?.name || p.category;
+      const matchCat = filterCategory ? (catIdentifier === filterCategory || p.category?.name === filterCategory) : true;
       return matchSearch && matchCat;
     });
 
@@ -327,13 +362,76 @@ export default function AdminPage() {
                     <label className="text-[10px] font-bold text-gray-400 block mb-1">หมวดหมู่ *</label>
                     <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} required className="w-full text-xs p-2.5 border border-gray-200 rounded-lg bg-white">
                       <option value="">-- เลือกหมวดหมู่ --</option>
-                      {categories.map((cat: string) => <option key={cat} value={cat}>{cat}</option>)}
+{categories.map((cat: any, index: number) => (
+  <option key={index} value={cat?.name || ''}>
+    {cat?.icon || ''} {cat?.name || 'ไม่มีชื่อ'}
+  </option>
+))}
                     </select>
                   </div>
                 </div>
 
                 {/* 🎯 การตั้งค่าการตลาดและติดป้าย (Marketing Features) */}
-                <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-200 grid grid-cols-2 gap-2 my-1">
+{/* 📁 ส่วนจัดการหมวดหมู่สินค้า (เพิ่ม + ลบ) */}
+                <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-xl flex flex-col gap-2">
+                  <label className="block text-[10px] font-bold text-orange-500 mb-0.5">
+                    📁 จัดการหมวดหมู่สินค้าในระบบ
+                  </label>
+                  
+                  {/* ช่องพิมพ์เพิ่มหมวดหมู่ */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="พิมพ์ชื่อหมวดหมู่ใหม่..."
+                      className="flex-1 text-xs p-2 border border-gray-200 rounded-lg focus:outline-none focus:border-orange-500 bg-white"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCategory}
+                      className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-lg transition-all active:scale-95 flex-shrink-0"
+                    >
+                      เพิ่มหมวด
+                    </button>
+                  </div>
+
+                  {/* 📜 รายชื่อหมวดหมู่ปัจจุบัน สามารถกดลบ ✕ ได้ */}
+                  <div className="flex flex-wrap gap-1 mt-1 max-h-20 overflow-y-auto p-1 bg-white border border-gray-100 rounded-lg">
+{categories.map((cat: any, index: number) => (
+  <div key={index} className="flex items-center gap-2 bg-white p-2 border border-gray-200 rounded-lg shadow-sm">
+    {editingCat?.index === index ? (
+      <>
+        <input 
+          value={editingCat?.icon || ''}
+          onChange={(e: any) => setEditingCat((prev: any) => ({...prev, icon: e.target.value}))}
+          className="w-8 text-center border rounded"
+        />
+        <input 
+          value={editingCat?.name || ''}
+          onChange={(e: any) => setEditingCat((prev: any) => ({...prev, name: e.target.value}))}
+          className="w-24 border rounded px-1"
+        />
+        <button onClick={() => {
+          setCategories(categories.map((c: any, i: number) => i === index ? editingCat : c));
+          setEditingCat(null);
+        }}>✅</button>
+      </>
+    ) : (
+      <>
+        <span>{cat.icon || '📦'}</span>
+        <span className="text-xs font-bold">{cat?.name || cat?.name || 'ไม่มีชื่อ'}</span>
+        <button onClick={() => setEditingCat({ ...cat, index: index })} className="text-blue-500">✏️</button>
+        <button onClick={() => setCategories(categories.filter((_: any, i: number) => i !== index))} className="text-red-500">❌</button>
+      </>
+    )}
+  </div>
+))}                                        
+                  </div>
+                </div>
+
+                {/* 🎯 การตั้งค่าการตลาด (เหลือแค่ชุดเดียว) */}
+                <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-200 grid grid-cols-2 gap-2 my-2">
                   <label className="flex items-center gap-2 text-[11px] font-semibold text-gray-700 cursor-pointer">
                     <input type="checkbox" checked={isFeatured} onChange={(e) => setIsFeatured(e.target.checked)} className="rounded text-orange-500 focus:ring-0" />
                     🌟 สินค้าแนะนำ
@@ -343,11 +441,29 @@ export default function AdminPage() {
                     🔥 สินค้าขายดี
                   </label>
                 </div>
+                
 
-                <div>
+<div>
                   <label className="text-[10px] font-bold text-gray-400 block mb-1">รูปภาพสินค้า (URL)</label>
                   <input type="text" value={image} onChange={(e) => setImage(e.target.value)} className="w-full text-xs p-2.5 border border-gray-200 rounded-lg" />
+                  
+                  {/* 🖼️ ระบบ Preview รูปภาพสินค้า */}
+                  <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center min-h-[120px]">
+                    {image ? (
+                      <img 
+                        src={image} 
+                        alt="Preview" 
+                        className="max-h-[100px] object-contain rounded-md"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/100?text=รูปไม่ขึ้น';
+                        }}
+                      />
+                    ) : (
+                      <span className="text-[10px] text-gray-400 italic">ยังไม่มีรูปภาพ (วาง URL ด้านบน)</span>
+                    )}
+                  </div>
                 </div>
+
                 <div>
                   <label className="text-[10px] font-bold text-gray-400 block mb-1">ลิงก์ Affiliate Shopee</label>
                   <input type="text" value={shopeeUrl} onChange={(e) => setShopeeUrl(e.target.value)} className="w-full text-xs p-2.5 border border-gray-200 rounded-lg" placeholder="https://shope.ee/..." />
@@ -362,6 +478,7 @@ export default function AdminPage() {
                 </button>
               </form>
             </div>
+            
 
             {/* ⚡ ระบบดึงสินค้าจำนวนมาก (Bulk Import) */}
             <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
@@ -395,10 +512,14 @@ export default function AdminPage() {
               {/* แผงควบคุม ค้นหา + กรองหมวดหมู่ + จัดเรียงระดับโปร */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-4">
                 <input type="text" placeholder="🔍 ค้นชื่อสินค้า..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="text-xs p-2 border border-gray-200 rounded-xl" />
-                <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="text-xs p-2 border border-gray-200 rounded-xl bg-white">
-                  <option value="">📂 ทุกหมวดหมู่สินค้า</option>
-                  {categories.map((cat: string) => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
+<select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="text-xs p-2 border border-gray-200 rounded-lg">
+  <option value="">📁 ทุกหมวดหมู่สินค้า</option>
+  {categories && categories.map((cat: any) => (
+    <option key={cat?.id || cat} value={typeof cat === 'string' ? cat : cat?.name}>
+      {typeof cat === 'string' ? cat : (cat?.name || 'ไม่มีชื่อ')}
+    </option>
+  ))}
+</select>
                 <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="text-xs p-2 border border-gray-200 rounded-xl bg-white">
                   <option value="newest">⏱️ เรียงจากล่าสุด</option>
                   <option value="price-asc">📈 ราคา: ต่ำไปสูง</option>
@@ -426,6 +547,7 @@ export default function AdminPage() {
                         </div>
                       </div>
                     </div>
+
                     
                     {/* ปุ่มแอ็กชันควบคุมการย้าย-ลบ-แก้ไข */}
                     <div className="flex items-center gap-1 flex-shrink-0 ml-2">
